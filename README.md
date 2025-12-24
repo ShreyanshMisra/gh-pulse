@@ -1,13 +1,7 @@
 # GitHub Activity Stream Analyzer
 
-[![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
-[![Next.js 14](https://img.shields.io/badge/Next.js-14-black.svg)](https://nextjs.org/)
-[![FastAPI](https://img.shields.io/badge/FastAPI-0.108+-009688.svg)](https://fastapi.tiangolo.com/)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+"Bloomberg Terminal for GitHub" providing early signals about what's happening in the open source ecosystem before it hits the front page. It's a real-time data pipeline that ingests GitHub's public event stream, processes millions of events, and surfaces actionable insights about trending repositories and emerging technologies.
 
-A real-time data pipeline that ingests GitHub's public event stream, processes millions of events, and surfaces actionable insights about trending repositories and emerging technologies.
-
-**Think of it as a "Bloomberg Terminal for GitHub"** - providing early signals about what's happening in the open source ecosystem before it hits the front page.
 
 ## Key Features
 
@@ -102,46 +96,6 @@ docker compose up -d
 | **Dashboard** | http://localhost:3000 |
 | **API Docs** | http://localhost:8000/docs |
 | **Health Check** | http://localhost:8000/health |
-
-## Project Structure
-
-```
-github-analyzer/
-├── docker-compose.yml           # All services orchestration
-├── .env.example                 # Environment template
-│
-├── services/
-│   ├── ingestion/               # GitHub API → Kafka
-│   │   ├── src/
-│   │   │   ├── poller.py        # Event polling with token rotation
-│   │   │   └── config.py        # Configuration management
-│   │   └── Dockerfile
-│   │
-│   ├── processor/               # Kafka → PostgreSQL
-│   │   ├── src/
-│   │   │   ├── consumer.py      # Batch consumer with velocity scoring
-│   │   │   └── config.py
-│   │   └── Dockerfile
-│   │
-│   └── api/                     # FastAPI backend
-│       ├── src/
-│       │   ├── main.py          # Application entry point
-│       │   ├── db.py            # SQLAlchemy models
-│       │   └── routers/
-│       │       └── trending.py  # /api/trending endpoints
-│       └── Dockerfile
-│
-├── frontend/                    # Next.js dashboard
-│   ├── app/
-│   │   ├── page.tsx             # Main dashboard
-│   │   └── layout.tsx           # App layout
-│   └── components/
-│       └── TrendingRepos.tsx    # Trending table component
-│
-└── scripts/
-    ├── init-db.sql              # PostgreSQL schema
-    └── start-dev.sh             # Development helper script
-```
 
 ## API Reference
 
@@ -270,51 +224,3 @@ docker compose exec kafka kafka-console-consumer.sh \
   --topic github-events-raw \
   --from-beginning
 ```
-
-## Configuration
-
-| Variable | Description | Default |
-|----------|-------------|---------|
-| `GITHUB_TOKENS` | Comma-separated GitHub PATs | Required |
-| `KAFKA_BOOTSTRAP_SERVERS` | Kafka broker address | `localhost:9094` |
-| `POSTGRES_HOST` | PostgreSQL host | `localhost` |
-| `POSTGRES_PORT` | PostgreSQL port | `5432` |
-| `POSTGRES_DB` | Database name | `github_analytics` |
-| `POSTGRES_USER` | Database user | `postgres` |
-| `POSTGRES_PASSWORD` | Database password | `postgres` |
-| `REDIS_URL` | Redis connection URL | `redis://localhost:6379` |
-| `POLL_INTERVAL` | GitHub API poll interval (seconds) | `10` |
-
-## Roadmap
-
-- [ ] WebSocket support for real-time dashboard updates
-- [ ] Elasticsearch integration for full-text search
-- [ ] Redis caching layer for API responses
-- [ ] Alerting system with webhooks
-- [ ] Dark horse detection (high activity, low stars)
-- [ ] Historical data backfill from GitHub Archive
-- [ ] Spark Streaming for advanced analytics
-
-## Contributing
-
-Contributions are welcome! Please feel free to submit a Pull Request.
-
-1. Fork the repository
-2. Create your feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add some amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
-
-## License
-
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
-## Acknowledgments
-
-- [GitHub Events API](https://docs.github.com/en/rest/activity/events) for the data source
-- [Bitnami Kafka](https://github.com/bitnami/containers/tree/main/bitnami/kafka) for the simplified Kafka setup
-- [shadcn/ui](https://ui.shadcn.com/) for UI component inspiration
-
----
-
-Built with Python, TypeScript, and a passion for open source analytics.
