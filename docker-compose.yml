@@ -1,0 +1,188 @@
+version: '3.8'
+
+services:
+  # Apache Kafka - Message broker for event streaming
+  kafka:
+    image: bitnami/kafka:latest
+    container_name: github-analyzer-kafka
+    ports:
+      - "9092:9092"
+      - "9094:9094"
+    environment:
+      - KAFKA_CFG_NODE_ID=0
+      - KAFKA_CFG_PROCESS_ROLES=controller,broker
+      - KAFKA_CFG_CONTROLLER_QUORUM_VOTERS=0@kafka:9093
+      - KAFKA_CFG_LISTENERS=PLAINTEXT://:9092,CONTROLLER://:9093,EXTERNAL://:9094
+      - KAFKA_CFG_ADVERTISED_LISTENERS=PLAINTEXT://kafka:9092,EXTERNAL://localhost:9094
+      - KAFKA_CFG_LISTENER_SECURITY_PROTOCOL_MAP=CONTROLLER:PLAINTEXT,EXTERNAL:PLAINTEXT,PLAINTEXT:PLAINTEXT
+      - KAFKA_CFG_CONTROLLER_LISTENER_NAMES=CONTROLLER
+      - KAFKA_CFG_INTER_BROKER_LISTENER_NAME=PLAINTEXT
+      - KAFKA_CFG_AUTO_CREATE_TOPICS_ENABLE=true
+    volumes:
+      - kafka_data:/bitnami/kafka
+    networks:
+      - github-analyzer-network
+    healthcheck:
+      test: ["CMD-SHELL", "kafka-topics.sh --bootstrap-server localhost:9092 --list"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  # PostgreSQL - Primary database for time-series aggregates
+  postgres:
+    image: postgres:16-alpine
+    container_name: github-analyzer-postgres
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_DB: github_analytics
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./scripts/init-db.sql:/docker-entrypoint-initdb.d/init-db.sql:ro
+    networks:
+      - github-analyzer-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d github_analytics"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Redis - Caching layer
+  redis:
+    image: redis:7-alpine
+    container_name: github-analyzer-redis
+    ports:
+      - "6379:6379"
+    command: redis-server --maxmemory 256mb --maxmemory-policy allkeys-lru
+    volumes:
+      - redis_data:/data
+    networks:
+      - github-analyzer-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Elasticsearch - Search and analytics engine
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.11.0
+    container_name: github-analyzer-elasticsearch
+    ports:
+      - "9200:9200"
+      - "9300:9300"
+    environment:
+      - discovery.type=single-node
+      - xpack.security.enabled=false
+      - xpack.security.enrollment.enabled=false
+      - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
+    volumes:
+      - elasticsearch_data:/usr/share/elasticsearch/data
+    networks:
+      - github-analyzer-network
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:9200/_cluster/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  # Ingestion Service - Polls GitHub API and publishes to Kafka
+  ingestion:
+    build:
+      context: ./services/ingestion
+      dockerfile: Dockerfile
+    container_name: github-analyzer-ingestion
+    environment:
+      - GITHUB_TOKENS=${GITHUB_TOKENS}
+      - KAFKA_BOOTSTRAP_SERVERS=kafka:9092
+      - POLL_INTERVAL=10
+    depends_on:
+      kafka:
+        condition: service_healthy
+    networks:
+      - github-analyzer-network
+    restart: unless-stopped
+
+  # Processor Service - Consumes from Kafka and writes to PostgreSQL
+  processor:
+    build:
+      context: ./services/processor
+      dockerfile: Dockerfile
+    container_name: github-analyzer-processor
+    environment:
+      - KAFKA_BOOTSTRAP_SERVERS=kafka:9092
+      - KAFKA_TOPIC=github-events-raw
+      - KAFKA_CONSUMER_GROUP=github-processor
+      - POSTGRES_HOST=postgres
+      - POSTGRES_PORT=5432
+      - POSTGRES_DB=github_analytics
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+      - REDIS_URL=redis://redis:6379
+      - BATCH_SIZE=100
+    depends_on:
+      kafka:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    networks:
+      - github-analyzer-network
+    restart: unless-stopped
+
+  # API Service - FastAPI backend
+  api:
+    build:
+      context: ./services/api
+      dockerfile: Dockerfile
+    container_name: github-analyzer-api
+    ports:
+      - "8000:8000"
+    environment:
+      - POSTGRES_HOST=postgres
+      - POSTGRES_PORT=5432
+      - POSTGRES_DB=github_analytics
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+      - REDIS_URL=redis://redis:6379
+      - ELASTICSEARCH_URL=http://elasticsearch:9200
+      - KAFKA_BOOTSTRAP_SERVERS=kafka:9092
+      - API_HOST=0.0.0.0
+      - API_PORT=8000
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      elasticsearch:
+        condition: service_healthy
+    networks:
+      - github-analyzer-network
+    restart: unless-stopped
+
+  # Frontend - Next.js dashboard (development mode)
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: github-analyzer-frontend
+    ports:
+      - "3000:3000"
+    environment:
+      - NEXT_PUBLIC_API_URL=http://localhost:8000
+    depends_on:
+      - api
+    networks:
+      - github-analyzer-network
+    restart: unless-stopped
+
+networks:
+  github-analyzer-network:
+    driver: bridge
+
+volumes:
+  kafka_data:
+  postgres_data:
+  redis_data:
+  elasticsearch_data:

@@ -1,0 +1,41 @@
+[project]
+name = "github-processor"
+version = "0.1.0"
+description = "Kafka consumer that processes GitHub events and writes to PostgreSQL"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "kafka-python>=2.0.2",
+    "psycopg2-binary>=2.9.9",
+    "python-dotenv>=1.0.0",
+    "redis>=5.0.1",
+    "elasticsearch>=8.11.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.4.0",
+    "pytest-cov>=4.1.0",
+    "black>=23.12.0",
+    "ruff>=0.1.8",
+    "mypy>=1.8.0",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src"]
+
+[tool.black]
+line-length = 100
+target-version = ["py311"]
+
+[tool.ruff]
+line-length = 100
+select = ["E", "F", "I", "N", "W"]
+
+[tool.mypy]
+python_version = "3.11"
+strict = true
