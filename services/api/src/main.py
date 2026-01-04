@@ -9,7 +9,10 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from .config import get_settings
 from .db import init_db, close_db
-from .routers import trending_router
+from .cache import init_redis, close_redis
+from .routers import trending_router, websocket_router, search_router
+from .routers.search import init_elasticsearch, close_elasticsearch
+from .middleware import RateLimitMiddleware, RequestLoggingMiddleware
 
 # Configure logging
 logging.basicConfig(
@@ -24,6 +27,8 @@ async def lifespan(app: FastAPI):
     """Application lifespan events."""
     # Startup
     logger.info("Starting up GitHub Activity Stream API...")
+
+    # Initialize database
     try:
         await init_db()
         logger.info("Database connection established")
@@ -31,10 +36,24 @@ async def lifespan(app: FastAPI):
         logger.error(f"Failed to connect to database: {e}")
         raise
 
+    # Initialize Redis (non-fatal if fails)
+    try:
+        await init_redis()
+    except Exception as e:
+        logger.warning(f"Redis initialization failed: {e}")
+
+    # Initialize Elasticsearch (non-fatal if fails)
+    try:
+        await init_elasticsearch()
+    except Exception as e:
+        logger.warning(f"Elasticsearch initialization failed: {e}")
+
     yield
 
     # Shutdown
     logger.info("Shutting down...")
+    await close_elasticsearch()
+    await close_redis()
     await close_db()
     logger.info("Shutdown complete")
 
@@ -48,6 +67,12 @@ app = FastAPI(
     redoc_url="/redoc",
     lifespan=lifespan,
 )
+
+# Add rate limiting middleware
+app.add_middleware(RateLimitMiddleware, requests_per_minute=120, requests_per_second=20)
+
+# Add request logging middleware
+app.add_middleware(RequestLoggingMiddleware)
 
 # Configure CORS
 app.add_middleware(
@@ -63,6 +88,8 @@ app.add_middleware(
 
 # Include routers
 app.include_router(trending_router)
+app.include_router(websocket_router)
+app.include_router(search_router)
 
 
 @app.get("/health")

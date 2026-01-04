@@ -9,6 +9,7 @@ from sqlalchemy import select, func, desc, and_
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..db import get_db, RepoMetrics, Repository
+from ..cache import cache_get, cache_set, make_cache_key, CacheTTL
 
 router = APIRouter(prefix="/api", tags=["trending"])
 
@@ -67,6 +68,12 @@ async def get_trending(
     Calculates trending repos based on star velocity and event activity
     within the specified time window.
     """
+    # Check cache first
+    cache_key = make_cache_key("trending", window, language or "all", str(limit))
+    cached = await cache_get(cache_key)
+    if cached:
+        return TrendingResponse(**cached)
+
     time_window = parse_window(window)
     cutoff_time = datetime.utcnow() - time_window
 
@@ -129,12 +136,17 @@ async def get_trending(
         if len(trending_repos) >= limit:
             break
 
-    return TrendingResponse(
+    response = TrendingResponse(
         data=trending_repos,
         window=window,
         timestamp=datetime.utcnow(),
         total=len(trending_repos),
     )
+
+    # Cache the response
+    await cache_set(cache_key, response.model_dump(), CacheTTL.TRENDING)
+
+    return response
 
 
 @router.get("/repos/{owner}/{repo}/metrics")
@@ -203,6 +215,12 @@ async def get_languages(
     db: AsyncSession = Depends(get_db),
 ) -> dict:
     """Get language statistics."""
+    # Check cache first
+    cache_key = make_cache_key("languages", window, str(limit))
+    cached = await cache_get(cache_key)
+    if cached:
+        return cached
+
     time_window = parse_window(window)
     cutoff_time = datetime.utcnow() - time_window
 
@@ -228,7 +246,7 @@ async def get_languages(
     result = await db.execute(query)
     languages = result.all()
 
-    return {
+    response = {
         "data": [
             {
                 "language": lang.language,
@@ -241,3 +259,8 @@ async def get_languages(
         "window": window,
         "timestamp": datetime.utcnow().isoformat(),
     }
+
+    # Cache the response
+    await cache_set(cache_key, response, CacheTTL.LANGUAGES)
+
+    return response
