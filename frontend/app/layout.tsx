@@ -1,13 +1,30 @@
 import type { Metadata } from 'next';
-import { Inter } from 'next/font/google';
 import './globals.css';
-
-const inter = Inter({ subsets: ['latin'] });
+import { Activity, BarChart3, Search, Github, TrendingUp, Zap } from 'lucide-react';
+import Link from 'next/link';
 
 export const metadata: Metadata = {
-  title: 'GitHub Activity Stream Analyzer',
-  description: 'Real-time analytics for GitHub events - Bloomberg Terminal for GitHub',
+  title: 'gh-pulse | GitHub Activity Stream',
+  description: 'Real-time analytics for GitHub events and trending repositories',
 };
+
+const navigation = [
+  { name: 'Dashboard', href: '/', icon: Activity },
+  { name: 'Languages', href: '/languages', icon: BarChart3 },
+  { name: 'Search', href: '/search', icon: Search },
+];
+
+function NavLink({ href, icon: Icon, children }: { href: string; icon: React.ElementType; children: React.ReactNode }) {
+  return (
+    <Link
+      href={href}
+      className="group flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium text-muted-foreground transition-all hover:bg-muted hover:text-foreground"
+    >
+      <Icon className="h-4 w-4 text-muted-foreground transition-colors group-hover:text-primary" />
+      {children}
+    </Link>
+  );
+}
 
 export default function RootLayout({
   children,
@@ -16,50 +33,90 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
-      <body className={inter.className}>
-        <div className="min-h-screen bg-background">
-          {/* Header */}
-          <header className="border-b border-border bg-card">
-            <div className="container mx-auto px-4 py-4">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <svg
-                    className="h-8 w-8 text-primary"
-                    viewBox="0 0 24 24"
-                    fill="currentColor"
-                  >
-                    <path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z" />
-                  </svg>
-                  <h1 className="text-xl font-semibold text-foreground">
-                    GitHub Activity Stream
-                  </h1>
-                </div>
-                <nav className="flex items-center gap-6">
-                  <a
-                    href="/"
-                    className="text-sm text-muted-foreground hover:text-foreground transition-colors"
-                  >
-                    Dashboard
-                  </a>
-                  <a
-                    href="/languages"
-                    className="text-sm text-muted-foreground hover:text-foreground transition-colors"
-                  >
-                    Languages
-                  </a>
-                  <a
-                    href="/search"
-                    className="text-sm text-muted-foreground hover:text-foreground transition-colors"
-                  >
-                    Search
-                  </a>
-                </nav>
+      <body className="antialiased">
+        <div className="flex min-h-screen">
+          {/* Sidebar */}
+          <aside className="fixed inset-y-0 left-0 z-50 flex w-64 flex-col border-r border-border bg-card">
+            {/* Logo */}
+            <div className="flex h-16 items-center gap-3 border-b border-border px-6">
+              <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary">
+                <Zap className="h-5 w-5 text-primary-foreground" />
+              </div>
+              <div className="flex flex-col">
+                <span className="text-base font-bold text-foreground">gh-pulse</span>
+                <span className="text-[10px] font-medium text-muted-foreground">GitHub Activity Stream</span>
               </div>
             </div>
-          </header>
+
+            {/* Navigation */}
+            <nav className="flex-1 space-y-1 p-4">
+              <div className="mb-3 px-3 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                Overview
+              </div>
+              {navigation.map((item) => (
+                <NavLink key={item.name} href={item.href} icon={item.icon}>
+                  {item.name}
+                </NavLink>
+              ))}
+            </nav>
+
+            {/* Status footer */}
+            <div className="border-t border-border p-4">
+              <div className="rounded-lg bg-muted/50 p-3">
+                <div className="flex items-center gap-2">
+                  <span className="status-dot live" />
+                  <span className="text-xs font-medium text-foreground">Live Stream</span>
+                </div>
+                <p className="mt-1.5 text-[10px] text-muted-foreground">
+                  Connected to GitHub Events API
+                </p>
+              </div>
+
+              {/* GitHub link */}
+              <a
+                href="https://github.com/ShreyanshMisra/gh-pulse"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="mt-3 flex items-center gap-2 text-xs text-muted-foreground hover:text-foreground transition-colors"
+              >
+                <Github className="h-3.5 w-3.5" />
+                <span>View on GitHub</span>
+              </a>
+            </div>
+          </aside>
 
           {/* Main content */}
-          <main className="container mx-auto px-4 py-6">{children}</main>
+          <main className="flex-1 pl-64">
+            {/* Top bar */}
+            <header className="sticky top-0 z-40 flex h-16 items-center justify-between border-b border-border bg-card/80 px-8 backdrop-blur-sm">
+              <div className="flex items-center gap-4">
+                <div className="flex items-center gap-2">
+                  <TrendingUp className="h-4 w-4 text-primary" />
+                  <span className="text-sm font-medium text-foreground">Real-Time Activity</span>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-4">
+                {/* Live indicator */}
+                <div className="flex items-center gap-2 rounded-full bg-success/10 px-3 py-1">
+                  <span className="status-dot live" />
+                  <span className="text-xs font-semibold text-success-foreground">LIVE</span>
+                </div>
+
+                {/* Time display */}
+                <div className="font-mono text-xs text-muted-foreground">
+                  <time suppressHydrationWarning>
+                    {new Date().toLocaleTimeString('en-US', { hour12: false })}
+                  </time>
+                </div>
+              </div>
+            </header>
+
+            {/* Page content */}
+            <div className="p-8">
+              {children}
+            </div>
+          </main>
         </div>
       </body>
     </html>
