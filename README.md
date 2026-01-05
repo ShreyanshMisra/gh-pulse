@@ -1,10 +1,10 @@
 # GitHub Activity Stream Analyzer
 
-Similar to a "Bloomberg Terminal for GitHub" providing early signals about what's happening in the open source ecosystem before it hits the front page. Uses a real-time data pipeline that ingests GitHub's public event stream, processes millions of events, and surfaces actionable insights about trending repositories and emerging technologies. 
+A "Bloomberg Terminal for GitHub" providing early signals about what's happening in the open source ecosystem before it hits the front page. Uses a real-time data pipeline that ingests GitHub's public event stream, processes millions of events, and surfaces actionable insights about trending repositories and emerging technologies. 
 
 ## Features
 
-- ontinuously polls the GitHub Events API with intelligent rate limit handling and token rotation
+- Continuously polls the GitHub Events API with intelligent rate limit handling and token rotation
 - Proprietary velocity score algorithm identifies repositories gaining momentum relative to their size
 - Real-time visualization of trending repos, language analytics, and activity metrics
 - Analyze trends across multiple time horizons: 1h, 6h, 24h, 7d, and 30d
