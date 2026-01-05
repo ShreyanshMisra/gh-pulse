@@ -8,7 +8,7 @@ WORKDIR /app
 COPY package.json package-lock.json* ./
 
 # Install dependencies
-RUN npm ci
+RUN npm install
 
 # Rebuild the source code only when needed
 FROM base AS builder
@@ -30,7 +30,8 @@ ENV NEXT_TELEMETRY_DISABLED 1
 RUN addgroup --system --gid 1001 nodejs
 RUN adduser --system --uid 1001 nextjs
 
-COPY --from=builder /app/public ./public
+# Copy public folder if it exists (may be empty)
+COPY --from=builder /app/public* ./public/
 
 # Set the correct permission for prerender cache
 RUN mkdir .next

@@ -133,3 +133,6 @@ service-account.json
 # Local development overrides
 docker-compose.override.yml
 docker-compose.local.yml
+
+# Claude Code
+.claude/

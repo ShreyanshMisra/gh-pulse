@@ -82,8 +82,8 @@ app.add_middleware(
         "http://127.0.0.1:3000",
     ],
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "OPTIONS"],
+    allow_headers=["Content-Type", "Authorization"],
 )
 
 # Include routers
@@ -119,15 +119,17 @@ async def root() -> dict:
 
 
 def main():
-    """Run the application with uvicorn."""
+    """Run the application with uvicorn (development only)."""
+    import os
     import uvicorn
 
     settings = get_settings()
+    is_dev = os.getenv("ENVIRONMENT", "production") == "development"
     uvicorn.run(
         "src.main:app",
         host=settings.api_host,
         port=settings.api_port,
-        reload=True,
+        reload=is_dev,
     )
 
 
