@@ -3,13 +3,13 @@ import { neon } from '@neondatabase/serverless';
 
 const sql = neon(process.env.DATABASE_URL!);
 
-const TIME_WINDOWS: Record<string, string> = {
-  '1h': '1 hour',
-  '6h': '6 hours',
-  '12h': '12 hours',
-  '24h': '24 hours',
-  '7d': '7 days',
-  '30d': '30 days',
+const TIME_WINDOWS: Record<string, number> = {
+  '1h': 1,
+  '6h': 6,
+  '12h': 12,
+  '24h': 24,
+  '7d': 168,
+  '30d': 720,
 };
 
 export async function GET(request: NextRequest) {
@@ -17,7 +17,7 @@ export async function GET(request: NextRequest) {
   const window = searchParams.get('window') || '24h';
   const limit = Math.min(parseInt(searchParams.get('limit') || '20'), 50);
 
-  const interval = TIME_WINDOWS[window] || '24 hours';
+  const hours = TIME_WINDOWS[window] || 24;
 
   try {
     const rows = await sql`
@@ -29,7 +29,7 @@ export async function GET(request: NextRequest) {
         COALESCE(AVG(m.velocity_score), 0) as avg_velocity
       FROM repositories r
       LEFT JOIN repo_metrics m ON r.repo_id = m.repo_id
-        AND m.timestamp > NOW() - INTERVAL ${interval}
+        AND m.timestamp > NOW() - INTERVAL '1 hour' * ${hours}
       WHERE r.language IS NOT NULL
       GROUP BY r.language
       HAVING COUNT(m.*) > 0
