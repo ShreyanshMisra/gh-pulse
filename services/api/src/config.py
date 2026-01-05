@@ -27,6 +27,9 @@ class Settings(BaseSettings):
     api_host: str = "0.0.0.0"
     api_port: int = 8000
 
+    # CORS - comma-separated list of allowed origins
+    cors_origins: str = "http://localhost:3000,http://127.0.0.1:3000"
+
     # Connection pool settings
     db_pool_size: int = 5
     db_max_overflow: int = 10

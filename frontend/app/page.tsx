@@ -5,8 +5,7 @@ import useSWR from 'swr';
 import TrendingRepos from '@/components/TrendingRepos';
 import VelocityChart from '@/components/VelocityChart';
 import ActivityTimeline from '@/components/ActivityTimeline';
-import { useWebSocket } from '@/hooks/useWebSocket';
-import { Wifi, WifiOff } from 'lucide-react';
+import { RefreshCw } from 'lucide-react';
 
 type TimeWindow = '1h' | '6h' | '12h' | '24h' | '7d' | '30d';
 
@@ -37,7 +36,14 @@ interface TrendingResponse {
   total: number;
 }
 
-const fetcher = async (url: string): Promise<TrendingResponse> => {
+interface StatsResponse {
+  total_events: number;
+  active_repos: number;
+  top_language: string;
+  events_per_min: number;
+}
+
+const fetcher = async (url: string) => {
   const res = await fetch(url);
   if (!res.ok) {
     throw new Error('Failed to fetch');
@@ -49,8 +55,12 @@ export default function Dashboard() {
   const [timeWindow, setTimeWindow] = useState<TimeWindow>('24h');
   const [language, setLanguage] = useState<string>('');
 
-  // WebSocket for real-time stats
-  const { isConnected, stats, trending, reconnect } = useWebSocket();
+  // Fetch stats with polling
+  const { data: stats, mutate: refreshStats } = useSWR<StatsResponse>(
+    '/api/stats',
+    fetcher,
+    { refreshInterval: 30000 }
+  );
 
   // Fetch trending data for charts
   const { data: trendingData } = useSWR<TrendingResponse>(
@@ -77,22 +87,14 @@ export default function Dashboard() {
 
         {/* Filters */}
         <div className="flex items-center gap-3">
-          {/* Connection status */}
+          {/* Refresh button */}
           <button
-            onClick={reconnect}
-            className={`flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs ${
-              isConnected
-                ? 'bg-green-100 text-green-700'
-                : 'bg-red-100 text-red-700'
-            }`}
-            title={isConnected ? 'Connected - Click to reconnect' : 'Disconnected - Click to reconnect'}
+            onClick={() => refreshStats()}
+            className="flex items-center gap-1.5 rounded-full bg-primary/10 px-2.5 py-1 text-xs text-primary hover:bg-primary/20"
+            title="Refresh stats"
           >
-            {isConnected ? (
-              <Wifi className="h-3 w-3" />
-            ) : (
-              <WifiOff className="h-3 w-3" />
-            )}
-            {isConnected ? 'Live' : 'Offline'}
+            <RefreshCw className="h-3 w-3" />
+            Refresh
           </button>
 
           {/* Language filter */}
@@ -119,31 +121,27 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* Stats cards - Real-time via WebSocket */}
+      {/* Stats cards */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <StatsCard
           title="Total Events"
           value={stats?.total_events?.toLocaleString() || '--'}
           description="Events in last hour"
-          trend={isConnected ? 'live' : undefined}
         />
         <StatsCard
           title="Active Repos"
           value={stats?.active_repos?.toLocaleString() || '--'}
           description="Repos with activity"
-          trend={isConnected ? 'live' : undefined}
         />
         <StatsCard
           title="Top Language"
           value={stats?.top_language || '--'}
           description="Most active language"
-          trend={isConnected ? 'live' : undefined}
         />
         <StatsCard
           title="Events/min"
           value={stats?.events_per_min?.toLocaleString() || '--'}
           description="Current throughput"
-          trend={isConnected ? 'live' : undefined}
         />
       </div>
 
@@ -155,44 +153,9 @@ export default function Dashboard() {
         {/* Activity timeline */}
         <ActivityTimeline
           eventsPerMin={stats?.events_per_min || 0}
-          isConnected={isConnected}
+          isConnected={true}
         />
       </div>
-
-      {/* Live trending (from WebSocket) */}
-      {isConnected && trending.length > 0 && (
-        <div className="rounded-lg border border-border bg-card">
-          <div className="flex items-center gap-2 border-b border-border px-4 py-3">
-            <span className="h-2 w-2 animate-pulse rounded-full bg-green-500" />
-            <span className="text-sm font-medium text-foreground">
-              Live Trending
-            </span>
-          </div>
-          <div className="grid gap-2 p-4 sm:grid-cols-2 lg:grid-cols-5">
-            {trending.map((repo, index) => (
-              <a
-                key={repo.repo_name}
-                href={`https://github.com/${repo.repo_name}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex items-center gap-3 rounded-lg border border-border p-3 transition-colors hover:bg-muted"
-              >
-                <span className="flex h-6 w-6 items-center justify-center rounded-full bg-primary/10 text-xs font-medium text-primary">
-                  {index + 1}
-                </span>
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-medium text-foreground">
-                    {repo.repo_name.split('/')[1] || repo.repo_name}
-                  </p>
-                  <p className="text-xs text-muted-foreground">
-                    +{repo.stars_gained} stars
-                  </p>
-                </div>
-              </a>
-            ))}
-          </div>
-        </div>
-      )}
 
       {/* Trending repos table */}
       <TrendingRepos timeWindow={timeWindow} language={language} />
@@ -204,21 +167,14 @@ function StatsCard({
   title,
   value,
   description,
-  trend,
 }: {
   title: string;
   value: string;
   description: string;
-  trend?: 'live';
 }) {
   return (
     <div className="rounded-lg border border-border bg-card p-4">
-      <div className="flex items-center justify-between">
-        <p className="text-sm text-muted-foreground">{title}</p>
-        {trend === 'live' && (
-          <span className="h-2 w-2 animate-pulse rounded-full bg-green-500" />
-        )}
-      </div>
+      <p className="text-sm text-muted-foreground">{title}</p>
       <p className="mt-1 text-2xl font-semibold text-foreground">{value}</p>
       <p className="mt-1 text-xs text-muted-foreground">{description}</p>
     </div>

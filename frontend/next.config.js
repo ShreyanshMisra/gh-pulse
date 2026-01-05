@@ -1,17 +1,7 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  output: 'standalone',
-  async rewrites() {
-    // Proxy API requests to the backend during development
-    return [
-      {
-        source: '/api/:path*',
-        destination: process.env.NEXT_PUBLIC_API_URL
-          ? `${process.env.NEXT_PUBLIC_API_URL}/api/:path*`
-          : 'http://localhost:8000/api/:path*',
-      },
-    ];
-  },
+  // Use standalone for Docker builds
+  output: process.env.DOCKER_BUILD ? 'standalone' : undefined,
 };
 
 module.exports = nextConfig;

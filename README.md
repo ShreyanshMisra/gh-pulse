@@ -4,82 +4,100 @@ A real-time data pipeline that ingests GitHub's public event stream, processes e
 
 ## Features
 
-- **Real-Time Ingestion** - Polls GitHub Events API every 10 seconds with intelligent token rotation
-- **Stream Processing** - Kafka-based pipeline with batch processing to PostgreSQL
+- **Scheduled Ingestion** - GitHub Actions fetches events every 15 minutes
 - **Trend Detection** - Velocity score algorithm identifies repos gaining momentum
-- **Live Dashboard** - Next.js frontend with real-time updates via SWR
+- **Live Dashboard** - Next.js frontend with automatic data refresh
 - **Language Analytics** - Track trends by programming language
 - **Time Windows** - Analyze trends across 1h, 6h, 24h, 7d, and 30d windows
+- **100% Free Hosting** - Runs entirely on Vercel + Neon free tiers
 
 ## Architecture
 
 ```
-  ┌─────────────┐      ┌─────────────┐      ┌─────────────┐      ┌─────────────┐
-  │   GitHub    │      │    Kafka    │      │  Processor  │      │ PostgreSQL  │
-  │  Events API │─────▶│   (Queue)   │─────▶│  (Consumer) │─────▶│    (DB)     │
-  └─────────────┘      └─────────────┘      └─────────────┘      └──────┬──────┘
-        │                                                                │
-        │ Poll every 10s                                                 │
-        │ Token rotation                                                 │
-        │ ETag caching                          ┌────────────────────────┘
-                                                │
-                                                ▼
-  ┌─────────────┐      ┌─────────────┐      ┌─────────────┐
-  │   Next.js   │◀─────│   FastAPI   │◀─────│    Redis    │
-  │  Dashboard  │      │     API     │      │   (Cache)   │
-  └─────────────┘      └─────────────┘      └─────────────┘
+┌─────────────────────────────────────────────────────────────────┐
+│                     GITHUB ACTIONS (Free)                       │
+│  ┌─────────────────────────────────────────────────────────┐   │
+│  │  Scheduled Workflow (every 15 min)                      │   │
+│  │  - Fetch GitHub Events API                              │   │
+│  │  - Calculate velocity scores                            │   │
+│  │  - Write to PostgreSQL                                  │   │
+│  └─────────────────────────────────────────────────────────┘   │
+└─────────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                      VERCEL (Free)                              │
+│  ┌─────────────┐      ┌─────────────┐      ┌─────────────┐     │
+│  │   Next.js   │ ───▶ │  API Routes │ ◀─── │  PostgreSQL │     │
+│  │  Frontend   │      │ (Serverless)│      │   (Neon)    │     │
+│  └─────────────┘      └─────────────┘      └─────────────┘     │
+└─────────────────────────────────────────────────────────────────┘
 ```
 
 ## Tech Stack
 
 | Component | Technology |
 |-----------|------------|
-| Ingestion | Python, kafka-python |
-| Processing | Python, psycopg2, Redis |
-| API | FastAPI, SQLAlchemy, asyncpg |
-| Search | Elasticsearch 8.x |
-| Database | PostgreSQL 16 |
-| Queue | Apache Kafka |
-| Cache | Redis |
 | Frontend | Next.js 14, TypeScript, Tailwind CSS, Recharts |
+| API | Next.js API Routes (Serverless) |
+| Database | PostgreSQL (Neon) |
+| Ingestion | GitHub Actions + Python |
+| Hosting | Vercel (Free) |
 
-## Quick Start
+## Deployment (100% Free)
 
-### Prerequisites
+### Step 1: Create a Neon Database
 
-- Docker and Docker Compose
-- GitHub Personal Access Token(s)
-
-### Setup
-
-1. Clone the repository:
-   ```bash
-   git clone https://github.com/yourusername/github-analyzer.git
-   cd github-analyzer
+1. Sign up at [neon.tech](https://neon.tech) (free tier)
+2. Create a new project
+3. Copy your connection string (looks like `postgresql://user:pass@host/db`)
+4. Run the database schema:
+   ```sql
+   -- Copy contents from scripts/init-db.sql
    ```
 
-2. Create a `.env` file with your GitHub token(s):
-   ```bash
-   GITHUB_TOKENS=ghp_your_token_here
+### Step 2: Deploy to Vercel
+
+1. Fork this repository to your GitHub account
+2. Go to [vercel.com](https://vercel.com) and click **Import Project**
+3. Select your forked repository
+4. Set the **Root Directory** to `frontend`
+5. Add environment variable:
    ```
-
-3. Start all services:
-   ```bash
-   docker-compose up -d
+   DATABASE_URL=postgresql://user:pass@host/db
    ```
+6. Click **Deploy**
 
-4. Access the dashboard at http://localhost:3000
+### Step 3: Set Up GitHub Actions
 
-### Services
+1. In your forked repo, go to **Settings** → **Secrets and variables** → **Actions**
+2. Add these secrets:
+   - `GH_EVENTS_TOKEN`: A GitHub Personal Access Token (create at github.com/settings/tokens)
+   - `DATABASE_URL`: Your Neon connection string
+3. The workflow runs automatically every 15 minutes
 
-| Service | Port | Description |
-|---------|------|-------------|
-| Frontend | 3000 | Next.js dashboard |
-| API | 8000 | FastAPI backend |
-| Kafka | 9092, 9094 | Message broker |
-| PostgreSQL | 5432 | Primary database |
-| Redis | 6379 | Cache layer |
-| Elasticsearch | 9200 | Search engine |
+### That's it! 🎉
+
+Your dashboard will be live at `https://your-project.vercel.app`
+
+## Local Development
+
+### Using Docker (Full Stack)
+
+```bash
+# Start all services
+docker-compose up -d
+
+# Access dashboard at http://localhost:3000
+```
+
+### Frontend Only
+
+```bash
+cd frontend
+npm install
+npm run dev
+```
 
 ## Velocity Score Algorithm
 
@@ -104,46 +122,33 @@ This rewards:
 |----------|-------------|
 | `GET /api/trending` | Top trending repositories |
 | `GET /api/languages` | Language statistics and trends |
-| `GET /api/repos/{owner}/{repo}/metrics` | Metrics for a specific repository |
-| `GET /api/search` | Search repositories |
-| `WS /ws` | WebSocket for real-time updates |
+| `GET /api/stats` | Real-time statistics |
 
 ## Project Structure
 
 ```
 github-analyzer/
-├── services/
-│   ├── api/          # FastAPI backend
-│   ├── ingestion/    # GitHub Events API poller
-│   └── processor/    # Kafka consumer & data processor
-├── frontend/         # Next.js dashboard
-├── scripts/          # Database initialization
-└── docker-compose.yml
+├── frontend/              # Next.js app (deploy this to Vercel)
+│   ├── app/
+│   │   ├── api/          # Serverless API routes
+│   │   └── ...           # Pages
+│   └── components/
+├── scripts/
+│   ├── init-db.sql       # Database schema
+│   └── ingest_events.py  # GitHub Actions ingestion script
+├── .github/workflows/
+│   └── ingest.yml        # Scheduled ingestion workflow
+└── docker-compose.yml    # Local development
 ```
 
-## Development
+## Cost Summary
 
-### Running Locally
-
-Start infrastructure services:
-```bash
-docker-compose up -d kafka postgres redis elasticsearch
-```
-
-Run individual services for development:
-```bash
-# API
-cd services/api && pip install -e . && python -m src.main
-
-# Ingestion
-cd services/ingestion && pip install -e . && python -m src.main
-
-# Processor
-cd services/processor && pip install -e . && python -m src.main
-
-# Frontend
-cd frontend && npm install && npm run dev
-```
+| Service | Provider | Cost |
+|---------|----------|------|
+| Frontend + API | Vercel | **Free** |
+| Database | Neon | **Free** (0.5 GB) |
+| Ingestion | GitHub Actions | **Free** (2000 min/month) |
+| **Total** | | **$0/month** |
 
 ## License
 
