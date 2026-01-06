@@ -12,6 +12,8 @@ dependencies = [
     "elasticsearch>=8.11.0",
 ]
 
+# Note: github-analyzer-shared is installed separately via Dockerfile
+
 [project.optional-dependencies]
 dev = [
     "pytest>=7.4.0",

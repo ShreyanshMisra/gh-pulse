@@ -10,7 +10,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from .config import get_settings
 from .db import init_db, close_db
 from .cache import init_redis, close_redis
-from .routers import trending_router, websocket_router, search_router
+from .routers import trending_router, websocket_router, search_router, stats_router
 from .routers.search import init_elasticsearch, close_elasticsearch
 from .middleware import RateLimitMiddleware, RequestLoggingMiddleware
 
@@ -89,6 +89,7 @@ app.add_middleware(
 app.include_router(trending_router)
 app.include_router(websocket_router)
 app.include_router(search_router)
+app.include_router(stats_router)
 
 
 @app.get("/health")
@@ -112,6 +113,7 @@ async def root() -> dict:
         "endpoints": {
             "trending": "/api/trending",
             "languages": "/api/languages",
+            "stats": "/api/stats",
             "repo_metrics": "/api/repos/{owner}/{repo}/metrics",
         },
     }

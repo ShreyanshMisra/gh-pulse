@@ -12,14 +12,18 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # Install uv for fast package management
 RUN pip install --no-cache-dir uv
 
+# Copy and install shared package first
+COPY shared/ /app/shared/
+RUN uv pip install --system -e /app/shared
+
 # Copy dependency files
-COPY pyproject.toml README.md ./
+COPY processor/pyproject.toml processor/README.md ./
 
 # Install dependencies
 RUN uv pip install --system -e .
 
 # Copy source code
-COPY src/ ./src/
+COPY processor/src/ ./src/
 
 # Set Python path
 ENV PYTHONPATH=/app

@@ -108,8 +108,8 @@ services:
   # Processor Service - Consumes from Kafka and writes to PostgreSQL
   processor:
     build:
-      context: ./services/processor
-      dockerfile: Dockerfile
+      context: ./services
+      dockerfile: processor/Dockerfile
     container_name: github-analyzer-processor
     environment:
       - KAFKA_BOOTSTRAP_SERVERS=kafka:9092

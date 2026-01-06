@@ -2,17 +2,20 @@
 
 import json
 import logging
-import math
 import time
 from datetime import datetime, timezone
 from typing import Any
 
 import psycopg2
-from psycopg2.extras import execute_batch
 from kafka import KafkaConsumer
 from kafka.errors import KafkaError
 
 from .config import Config
+
+# Import from shared package
+from shared.constants import STAR_EVENTS, SUPPORTED_EVENTS
+from shared.velocity import calculate_velocity_score
+from shared.db_utils import upsert_repositories, insert_metrics
 
 logger = logging.getLogger(__name__)
 
@@ -22,25 +25,10 @@ class GitHubEventProcessor:
 
     Features:
     - Batch processing for efficiency
-    - Velocity score calculation
+    - Velocity score calculation (via shared package)
     - Repository metadata tracking
     - Graceful error handling
     """
-
-    # Event types that indicate a "star" (WatchEvent is GitHub's star event)
-    STAR_EVENTS = {"WatchEvent"}
-
-    # All supported event types
-    SUPPORTED_EVENTS = {
-        "WatchEvent",      # Stars
-        "ForkEvent",       # Forks
-        "PushEvent",       # Commits
-        "IssuesEvent",     # Issues
-        "PullRequestEvent",  # Pull requests
-        "CreateEvent",     # Repo/branch/tag creation
-        "ReleaseEvent",    # Releases
-        "IssueCommentEvent",  # Comments
-    }
 
     def __init__(self, config: Config):
         self.config = config
@@ -71,42 +59,6 @@ class GitHubEventProcessor:
         self.db_conn.autocommit = False
         logger.info("PostgreSQL connection established")
 
-    def _calculate_velocity_score(
-        self,
-        event_type: str,
-        repo_id: int,
-        total_stars: int,
-    ) -> float:
-        """Calculate velocity score for an event.
-
-        Velocity Score Formula:
-        - Base score depends on event type
-        - Normalized by repository size (smaller repos get higher scores for same activity)
-        - Star events are weighted highest
-        """
-        # Base weights by event type
-        event_weights = {
-            "WatchEvent": 1.0,       # Stars are most valuable
-            "ForkEvent": 0.8,        # Forks indicate serious interest
-            "PullRequestEvent": 0.6,  # PRs show active development
-            "PushEvent": 0.3,        # Commits are routine
-            "IssuesEvent": 0.4,      # Issues show engagement
-            "CreateEvent": 0.2,      # Creation events
-            "ReleaseEvent": 0.5,     # Releases are significant
-            "IssueCommentEvent": 0.1,  # Comments are minor
-        }
-
-        base_weight = event_weights.get(event_type, 0.1)
-
-        # Size normalization: smaller repos get higher scores
-        # Using log scale to prevent extreme values
-        size_factor = 1.0 / math.log(max(total_stars, 10) + 1)
-
-        # Final velocity score
-        velocity = base_weight * size_factor * 10  # Scale to reasonable range
-
-        return round(velocity, 4)
-
     def _extract_repo_info(self, event: dict[str, Any]) -> dict[str, Any] | None:
         """Extract repository information from an event."""
         repo = event.get("repo", {})
@@ -131,7 +83,7 @@ class GitHubEventProcessor:
     def _process_event(self, event: dict[str, Any]) -> dict[str, Any] | None:
         """Process a single event and return metrics data."""
         event_type = event.get("type")
-        if event_type not in self.SUPPORTED_EVENTS:
+        if event_type not in SUPPORTED_EVENTS:
             return None
 
         repo = event.get("repo", {})
@@ -153,10 +105,10 @@ class GitHubEventProcessor:
         total_stars = self.repo_stars_cache.get(repo_id, 0)
 
         # Calculate stars delta (1 for star events, 0 otherwise)
-        stars_delta = 1 if event_type in self.STAR_EVENTS else 0
+        stars_delta = 1 if event_type in STAR_EVENTS else 0
 
-        # Calculate velocity score
-        velocity_score = self._calculate_velocity_score(event_type, repo_id, total_stars)
+        # Calculate velocity score using shared function
+        velocity_score = calculate_velocity_score(event_type, total_stars)
 
         # Parse timestamp
         created_at = event.get("created_at")
@@ -178,7 +130,7 @@ class GitHubEventProcessor:
         }
 
     def _flush_to_db(self) -> int:
-        """Flush buffered data to PostgreSQL."""
+        """Flush buffered data to PostgreSQL using shared utilities."""
         if not self.events_buffer and not self.repos_buffer:
             return 0
 
@@ -189,60 +141,14 @@ class GitHubEventProcessor:
         records_written = 0
 
         try:
-            # Upsert repositories
+            # Upsert repositories using shared utility
             if self.repos_buffer:
-                repo_data = [
-                    (
-                        r["repo_id"],
-                        r["full_name"],
-                        r["language"],
-                        r["description"],
-                        r["total_stars"] or 0,
-                    )
-                    for r in self.repos_buffer.values()
-                ]
+                repo_count = upsert_repositories(cursor, list(self.repos_buffer.values()))
+                logger.debug(f"Upserted {repo_count} repositories")
 
-                execute_batch(
-                    cursor,
-                    """
-                    INSERT INTO repositories (repo_id, full_name, language, description, total_stars, last_updated_at)
-                    VALUES (%s, %s, %s, %s, %s, NOW())
-                    ON CONFLICT (repo_id) DO UPDATE SET
-                        full_name = EXCLUDED.full_name,
-                        language = COALESCE(EXCLUDED.language, repositories.language),
-                        description = COALESCE(EXCLUDED.description, repositories.description),
-                        total_stars = GREATEST(EXCLUDED.total_stars, repositories.total_stars),
-                        last_updated_at = NOW()
-                    """,
-                    repo_data,
-                    page_size=100,
-                )
-                logger.debug(f"Upserted {len(repo_data)} repositories")
-
-            # Insert metrics
+            # Insert metrics using shared utility
             if self.events_buffer:
-                metrics_data = [
-                    (
-                        e["repo_id"],
-                        e["repo_name"],
-                        e["event_type"],
-                        e["timestamp"],
-                        e["stars_delta"],
-                        e["velocity_score"],
-                    )
-                    for e in self.events_buffer
-                ]
-
-                execute_batch(
-                    cursor,
-                    """
-                    INSERT INTO repo_metrics (repo_id, repo_name, event_type, timestamp, stars_delta, velocity_score)
-                    VALUES (%s, %s, %s, %s, %s, %s)
-                    """,
-                    metrics_data,
-                    page_size=100,
-                )
-                records_written = len(metrics_data)
+                records_written = insert_metrics(cursor, self.events_buffer)
                 logger.debug(f"Inserted {records_written} metrics records")
 
             self.db_conn.commit()

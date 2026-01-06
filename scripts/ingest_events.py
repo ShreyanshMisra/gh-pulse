@@ -4,40 +4,23 @@ GitHub Events Ingestion Script for GitHub Actions.
 
 Fetches events from GitHub API and writes processed metrics to PostgreSQL.
 Designed to run as a scheduled GitHub Action.
+
+Uses shared package for velocity calculation and DB operations.
 """
 
-import json
-import math
 import os
 import sys
 from datetime import datetime, timezone
 
 import psycopg2
 import requests
-from psycopg2.extras import execute_batch
 
+# Add shared package to path (for GitHub Actions which pip installs from local)
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'services', 'shared', 'src'))
 
-# Event types and their weights for velocity scoring
-EVENT_WEIGHTS = {
-    "WatchEvent": 1.0,       # Stars are most valuable
-    "ForkEvent": 0.8,        # Forks indicate serious interest
-    "PullRequestEvent": 0.6, # PRs show active development
-    "PushEvent": 0.3,        # Commits are routine
-    "IssuesEvent": 0.4,      # Issues show engagement
-    "CreateEvent": 0.2,      # Creation events
-    "ReleaseEvent": 0.5,     # Releases are significant
-    "IssueCommentEvent": 0.1,# Comments are minor
-}
-
-STAR_EVENTS = {"WatchEvent"}
-
-
-def calculate_velocity_score(event_type: str, total_stars: int) -> float:
-    """Calculate velocity score for an event."""
-    base_weight = EVENT_WEIGHTS.get(event_type, 0.1)
-    size_factor = 1.0 / math.log(max(total_stars, 10) + 1)
-    velocity = base_weight * size_factor * 10
-    return round(velocity, 4)
+from shared.constants import EVENT_WEIGHTS, STAR_EVENTS
+from shared.velocity import calculate_velocity_score
+from shared.db_utils import upsert_repositories, insert_metrics
 
 
 def fetch_github_events(token: str) -> list[dict]:
@@ -112,50 +95,17 @@ def process_events(events: list[dict]) -> tuple[list[dict], list[dict]]:
 
 
 def write_to_database(database_url: str, repos: list[dict], metrics: list[dict]) -> None:
-    """Write processed data to PostgreSQL."""
+    """Write processed data to PostgreSQL using shared utilities."""
     conn = psycopg2.connect(database_url)
     cursor = conn.cursor()
 
     try:
-        # Upsert repositories
-        if repos:
-            repo_data = [
-                (r["repo_id"], r["full_name"], r["language"], r["description"], r["total_stars"] or 0)
-                for r in repos
-            ]
-            execute_batch(
-                cursor,
-                """
-                INSERT INTO repositories (repo_id, full_name, language, description, total_stars, last_updated_at)
-                VALUES (%s, %s, %s, %s, %s, NOW())
-                ON CONFLICT (repo_id) DO UPDATE SET
-                    full_name = EXCLUDED.full_name,
-                    language = COALESCE(EXCLUDED.language, repositories.language),
-                    description = COALESCE(EXCLUDED.description, repositories.description),
-                    total_stars = GREATEST(EXCLUDED.total_stars, repositories.total_stars),
-                    last_updated_at = NOW()
-                """,
-                repo_data,
-                page_size=100,
-            )
-            print(f"Upserted {len(repos)} repositories")
+        # Use shared DB utilities
+        repo_count = upsert_repositories(cursor, repos)
+        print(f"Upserted {repo_count} repositories")
 
-        # Insert metrics
-        if metrics:
-            metrics_data = [
-                (m["repo_id"], m["repo_name"], m["event_type"], m["timestamp"], m["stars_delta"], m["velocity_score"])
-                for m in metrics
-            ]
-            execute_batch(
-                cursor,
-                """
-                INSERT INTO repo_metrics (repo_id, repo_name, event_type, timestamp, stars_delta, velocity_score)
-                VALUES (%s, %s, %s, %s, %s, %s)
-                """,
-                metrics_data,
-                page_size=100,
-            )
-            print(f"Inserted {len(metrics)} metrics records")
+        metrics_count = insert_metrics(cursor, metrics)
+        print(f"Inserted {metrics_count} metrics records")
 
         conn.commit()
         print("Database commit successful")

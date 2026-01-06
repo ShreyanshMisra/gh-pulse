@@ -22,6 +22,7 @@ jobs:
       - name: Install dependencies
         run: |
           pip install requests psycopg2-binary
+          pip install -e services/shared
 
       - name: Fetch and process GitHub events
         env:

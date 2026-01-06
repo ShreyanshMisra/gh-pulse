@@ -158,8 +158,11 @@ class SearchResult(BaseModel):
     description: str | None
     language: str | None
     total_stars: int
+    forks: int = 0  # Fork count (not stored, default to 0)
     velocity_score: float
     score: float  # Search relevance score
+    owner: dict | None = None  # Optional owner info
+    updated_at: str | None = None  # Last update timestamp
 
 
 class SearchResponse(BaseModel):

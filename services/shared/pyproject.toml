@@ -1,0 +1,15 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "github-analyzer-shared"
+version = "0.1.0"
+description = "Shared utilities for GitHub Activity Stream Analyzer"
+requires-python = ">=3.11"
+dependencies = [
+    "psycopg2-binary>=2.9.9",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/shared"]

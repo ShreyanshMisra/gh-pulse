@@ -14,6 +14,13 @@ from ..cache import cache_get, cache_set, make_cache_key, CacheTTL
 router = APIRouter(prefix="/api", tags=["trending"])
 
 
+class RepoOwner(BaseModel):
+    """Owner info for trending repos."""
+
+    login: str
+    avatar_url: str
+
+
 class TrendingRepo(BaseModel):
     """Response model for trending repositories."""
 
@@ -25,6 +32,7 @@ class TrendingRepo(BaseModel):
     stars_gained: int
     velocity_score: float
     event_count: int
+    owner: RepoOwner | None = None  # Optional owner info (not stored in DB)
 
 
 class TrendingResponse(BaseModel):
@@ -251,7 +259,7 @@ async def get_languages(
             {
                 "language": lang.language,
                 "repo_count": lang.repo_count,
-                "total_stars": lang.total_stars or 0,
+                "total_stars_gained": lang.total_stars or 0,  # Renamed to match frontend
                 "event_count": lang.event_count,
             }
             for lang in languages
